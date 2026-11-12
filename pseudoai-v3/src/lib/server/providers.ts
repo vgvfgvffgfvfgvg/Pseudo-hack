@@ -18,7 +18,7 @@ export const PROVIDERS: Record<"flax" | "scythe", ProviderConfig> = {
   flax: {
     apiUrl: "https://api.groq.com/openai/v1/chat/completions",
     keyEnv: "GROQ_API_KEY",
-    targetModel: "llama-3.3-70b-versatile",
+    targetModel: "openai/gpt-oss-120b",
     maxTemperature: 2,
     label: "Flax",
   },
