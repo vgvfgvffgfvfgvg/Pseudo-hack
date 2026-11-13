@@ -3,6 +3,7 @@
 import { Download, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MODEL_REGISTRY } from "@/lib/models";
+import { useAvailability } from "@/lib/availability";
 import { useChatStore } from "@/lib/store";
 import type { Chat } from "@/lib/types";
 
@@ -16,7 +17,10 @@ export function ChatHeader({ chat, onToggleSidebar, onExport }: ChatHeaderProps)
   const streaming = useChatStore(
     (s) => s.streaming != null && s.streaming.chatId === chat?.id
   );
-  const modelInfo = MODEL_REGISTRY[chat?.model ?? "flax"];
+  const availability = useAvailability();
+  const model = chat?.model ?? "flax";
+  const modelInfo = MODEL_REGISTRY[model];
+  const unavailable = !streaming && availability[model] === "unavailable";
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background/80 px-3 backdrop-blur-md md:pl-4">
@@ -35,14 +39,22 @@ export function ChatHeader({ chat, onToggleSidebar, onExport }: ChatHeaderProps)
 
       <div className="flex shrink-0 items-center gap-2">
         <div
-          className="flex items-center gap-2 rounded-full border bg-card px-3 py-1 font-mono text-[10px] text-muted-foreground"
+          className={`flex items-center gap-2 rounded-full border bg-card px-3 py-1 font-mono text-[10px] ${
+            unavailable ? "border-destructive/40 text-destructive" : "text-muted-foreground"
+          }`}
           aria-live="polite"
         >
           <span
-            className={`size-1.5 rounded-full ${streaming ? "dot-pulse bg-primary" : "bg-primary/70"}`}
+            className={`size-1.5 rounded-full ${
+              streaming ? "dot-pulse bg-primary" : unavailable ? "bg-destructive" : "bg-primary/70"
+            }`}
             aria-hidden
           />
-          {streaming ? "thinking…" : `ready · ${modelInfo.name.toLowerCase()}`}
+          {streaming
+            ? "thinking…"
+            : unavailable
+              ? `${modelInfo.name.toLowerCase()} · unavailable`
+              : `ready · ${modelInfo.name.toLowerCase()}`}
         </div>
         <Button
           variant="ghost"

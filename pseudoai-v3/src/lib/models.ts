@@ -29,7 +29,7 @@ export const MODEL_REGISTRY: Record<ModelId, ModelInfo> = {
     id: "nova",
     name: "Nova",
     sub: "Smart mode",
-    tag: "nova · deep reasoning",
+    tag: "nova · smart mode",
   },
 };
 

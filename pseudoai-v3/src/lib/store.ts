@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { migrateLegacyIfNeeded } from "./legacy-migration";
 import { isModelId } from "./models";
-import type { Chat, ChatMessage, ModelId } from "./types";
+import type { Chat, ChatMessage, ModelId, ToolTrace } from "./types";
 
 export function uid(prefix = "id"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -70,6 +70,8 @@ interface StreamingState {
   chatId: string;
   text: string;
   startedAt: number;
+  /** Agent-mode tool calls observed so far in this generation */
+  tools: ToolTrace[];
 }
 
 interface ChatState {
@@ -77,6 +79,8 @@ interface ChatState {
   activeChatId: string | null;
   currentModel: ModelId;
   temperature: number;
+  /** Agent mode: server-side tools may be used to answer (global pref) */
+  agentMode: boolean;
 
   /** In-flight generation buffer (not persisted) */
   streaming: StreamingState | null;
@@ -89,6 +93,7 @@ interface ChatState {
   switchChat: (id: string) => void;
   setModel: (model: ModelId) => void;
   setTemperature: (t: number) => void;
+  setAgent: (on: boolean) => void;
 
   appendMessage: (chatId: string, msg: ChatMessage) => void;
   setTitleFromFirstMessage: (chatId: string, text: string) => void;
@@ -97,6 +102,7 @@ interface ChatState {
 
   setStreaming: (s: StreamingState | null) => void;
   appendDelta: (text: string) => void;
+  appendToolTrace: (tool: ToolTrace) => void;
   commitStreaming: (stopped?: boolean) => void;
   setError: (chatId: string, message: string | null) => void;
 }
@@ -118,6 +124,7 @@ export const useChatStore = create<ChatState>()(
       activeChatId: null,
       currentModel: "flax",
       temperature: 0.7,
+      agentMode: false,
       streaming: null,
       lastError: null,
 
@@ -182,6 +189,8 @@ export const useChatStore = create<ChatState>()(
 
       setTemperature: (t) => set({ temperature: Math.min(1, Math.max(0.1, t)) }),
 
+      setAgent: (on) => set({ agentMode: on }),
+
       appendMessage: (chatId, msg) =>
         set((s) => ({
           chats: touchChat(s.chats, chatId, (c) => {
@@ -234,6 +243,13 @@ export const useChatStore = create<ChatState>()(
           s.streaming ? { streaming: { ...s.streaming, text: s.streaming.text + text } } : {}
         ),
 
+      appendToolTrace: (tool) =>
+        set((s) =>
+          s.streaming
+            ? { streaming: { ...s.streaming, tools: [...s.streaming.tools, tool] } }
+            : {}
+        ),
+
       commitStreaming: (stopped = false) => {
         const s = get();
         const streaming = s.streaming;
@@ -247,6 +263,7 @@ export const useChatStore = create<ChatState>()(
           content,
           createdAt: Date.now(),
           stopped: stopped || undefined,
+          ...(streaming.tools.length > 0 ? { tools: streaming.tools } : {}),
         };
         set((st) => ({
           chats: touchChat(st.chats, streaming.chatId, (c) => {
@@ -267,6 +284,7 @@ export const useChatStore = create<ChatState>()(
         activeChatId: state.activeChatId,
         currentModel: state.currentModel,
         temperature: state.temperature,
+        agentMode: state.agentMode,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<ChatState>;
@@ -292,6 +310,7 @@ export const useChatStore = create<ChatState>()(
             typeof p.temperature === "number" && p.temperature >= 0.1 && p.temperature <= 1
               ? p.temperature
               : 0.7,
+          agentMode: typeof p.agentMode === "boolean" ? p.agentMode : false,
         };
       },
     }

@@ -9,14 +9,18 @@ declare module "react-syntax-highlighter" {
     showLineNumbers?: boolean;
     wrapLongLines?: boolean;
     customStyle?: React.CSSProperties;
-    codeTagProps?: React.CSSProperties;
+    codeTagProps?: { className?: string; style?: React.CSSProperties };
     [key: string]: unknown;
   }
 
-  export const Prism: ComponentType<SyntaxHighlighterProps>;
-  export const PrismLight: ComponentType<SyntaxHighlighterProps>;
-  export const Light: ComponentType<SyntaxHighlighterProps>;
-  const SyntaxHighlighter: ComponentType<SyntaxHighlighterProps>;
+  export type SyntaxHighlighterComponent = ComponentType<SyntaxHighlighterProps> & {
+    registerLanguage(name: string, language: unknown): void;
+  };
+
+  export const Prism: SyntaxHighlighterComponent;
+  export const PrismLight: SyntaxHighlighterComponent;
+  export const Light: SyntaxHighlighterComponent;
+  const SyntaxHighlighter: SyntaxHighlighterComponent;
   export default SyntaxHighlighter;
 }
 

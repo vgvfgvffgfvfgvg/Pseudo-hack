@@ -2,10 +2,12 @@
 
 import { MessageSquare, PenLine, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MODEL_REGISTRY, MODEL_IDS } from "@/lib/models";
+import { availabilityHint, useAvailability } from "@/lib/availability";
 import { useChatStore } from "@/lib/store";
 import { ThemeToggle } from "./theme-toggle";
 import type { ModelId } from "@/lib/types";
@@ -21,6 +23,7 @@ export function Sidebar({ onOpenSettings, onRename, onCloseMobile, className }: 
   const chats = useChatStore((s) => s.chats);
   const activeChatId = useChatStore((s) => s.activeChatId);
   const currentModel = useChatStore((s) => s.currentModel);
+  const availability = useAvailability();
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -144,24 +147,41 @@ export function Sidebar({ onOpenSettings, onRename, onCloseMobile, className }: 
           {MODEL_IDS.map((id: ModelId) => {
             const info = MODEL_REGISTRY[id];
             const active = currentModel === id;
+            const unavailable = availability[id] === "unavailable";
             return (
               <button
                 key={id}
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => useChatStore.getState().setModel(id)}
+                aria-disabled={unavailable || undefined}
+                title={unavailable ? (availabilityHint(id) ?? `${info.name} is unavailable`) : undefined}
+                onClick={() => {
+                  if (unavailable) {
+                    toast.info(`${info.name} is unavailable here`, {
+                      description: availabilityHint(id),
+                    });
+                    return;
+                  }
+                  useChatStore.getState().setModel(id);
+                }}
                 className={`rounded-lg border px-2 py-2 text-center transition-all ${
-                  active
-                    ? "border-primary/60 bg-primary/10 shadow-[0_0_10px_var(--glow)]"
-                    : "bg-card hover:border-muted-foreground/40"
+                  unavailable
+                    ? "cursor-not-allowed border-dashed bg-card/50 opacity-55"
+                    : active
+                      ? "border-primary/60 bg-primary/10 shadow-[0_0_10px_var(--glow)]"
+                      : "bg-card hover:border-muted-foreground/40"
                 }`}
               >
-                <span className={`block text-xs font-bold ${active ? "text-primary" : ""}`}>
+                <span
+                  className={`block text-xs font-bold ${
+                    unavailable ? "text-muted-foreground line-through decoration-1" : active ? "text-primary" : ""
+                  }`}
+                >
                   {info.name}
                 </span>
                 <span className="block font-mono text-[8px] uppercase tracking-wide text-muted-foreground">
-                  {info.sub}
+                  {unavailable ? "unavailable" : info.sub}
                 </span>
               </button>
             );

@@ -5,6 +5,7 @@ import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "./logo-mark";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { ToolChips } from "./tool-chips";
 import { useCopyFeedback } from "@/lib/clipboard";
 import type { ChatMessage as ChatMessageType } from "@/lib/types";
 
@@ -44,7 +45,8 @@ export const ChatMessageView = memo(function ChatMessageView({
       </div>
 
       {/* Bubble + actions */}
-      <div className={`flex min-w-0 max-w-[min(100%,42rem)] flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`flex min-w-0 max-w-[min(100%,42rem)] flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
+        {!isUser && <ToolChips tools={message.tools ?? []} />}
         <div
           className={`w-fit max-w-full rounded-2xl px-4 py-3 text-sm leading-relaxed ${
             isUser

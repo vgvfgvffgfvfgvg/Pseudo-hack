@@ -8,6 +8,7 @@ import { useChatStore } from "@/lib/store";
 import { ChatMessageView } from "./chat-message";
 import { LogoMark } from "./logo-mark";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { ToolChips } from "./tool-chips";
 import type { Chat } from "@/lib/types";
 
 const SUGGESTIONS = [
@@ -95,7 +96,8 @@ export function ChatMessages({ chat, onSuggestion, onRegenerate, onRetry, busy }
                 >
                   <LogoMark size={30} />
                 </div>
-                <div className="flex min-w-0 max-w-[min(100%,42rem)] flex-col gap-1 items-start">
+                <div className="flex min-w-0 max-w-[min(100%,42rem)] flex-col gap-1.5 items-start">
+                  <ToolChips tools={streaming.tools} />
                   <div className="w-fit max-w-full rounded-2xl rounded-tl-sm border border-primary/15 bg-bubble-ai px-4 py-3 text-sm leading-relaxed">
                     {streaming.text ? (
                       <>
@@ -103,10 +105,18 @@ export function ChatMessages({ chat, onSuggestion, onRegenerate, onRetry, busy }
                         <span className="stream-cursor" aria-hidden />
                       </>
                     ) : (
-                      <span className="flex items-center gap-1 py-1" aria-label="Pseudo is thinking">
+                      <span
+                        className="flex items-center gap-2 py-1 font-mono text-[11px] text-muted-foreground"
+                        aria-label="Pseudo is working"
+                      >
                         <span className="thinking-dot size-1.5 rounded-full bg-primary" />
                         <span className="thinking-dot size-1.5 rounded-full bg-primary" />
                         <span className="thinking-dot size-1.5 rounded-full bg-primary" />
+                        <span>
+                          {streaming.tools.length > 0
+                            ? "working…"
+                            : "thinking…"}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -115,7 +125,7 @@ export function ChatMessages({ chat, onSuggestion, onRegenerate, onRetry, busy }
             )}
 
             {/* Error banner */}
-            {lastError?.chatId === chat?.id && !busy && (
+            {lastError != null && lastError.chatId === chat?.id && !busy && (
               <div className="anim-fade-up mx-auto flex w-fit items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
                 <AlertTriangle className="size-4 shrink-0" />
                 <span className="max-w-[28rem]">{lastError.message}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Square } from "lucide-react";
+import { ArrowUp, Bot, Square } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { MODEL_REGISTRY } from "@/lib/models";
@@ -19,6 +19,7 @@ const MAX_HEIGHT = 160;
 export function ChatInput({ onSend, onStop, busy, model }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingText = useChatStore((s) => s.streaming?.chatId);
+  const agentOn = useChatStore((s) => s.agentMode);
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current;
@@ -97,10 +98,24 @@ export function ChatInput({ onSend, onStop, busy, model }: ChatInputProps) {
             </Button>
           )}
         </div>
-        <div className="mt-2 flex items-center justify-between px-1 font-mono text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block size-1.5 rounded-full bg-primary" />
-            {MODEL_REGISTRY[model].tag}
+        <div className="mt-2 flex items-center justify-between gap-2 px-1 font-mono text-[10px] text-muted-foreground">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="inline-block size-1.5 shrink-0 rounded-full bg-primary" />
+            <span className="truncate">{MODEL_REGISTRY[model].tag}</span>
+            <button
+              type="button"
+              onClick={() => useChatStore.getState().setAgent(!agentOn)}
+              className={`ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-all ${
+                agentOn
+                  ? "border-primary/60 bg-primary/10 text-primary shadow-[0_0_8px_var(--glow)]"
+                  : "border-border bg-card text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground"
+              }`}
+              aria-pressed={agentOn}
+              title="Agent mode — Pseudo can use tools (web pages, Wikipedia, calculator) before answering"
+            >
+              <Bot className="size-3" aria-hidden />
+              agent {agentOn ? "on" : "off"}
+            </button>
           </span>
           <span className="hidden sm:inline">Enter to send · Shift+Enter for newline</span>
         </div>

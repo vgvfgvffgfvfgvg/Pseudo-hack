@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { toast } from "sonner";
+import { availabilityHint, isModelUnavailable } from "@/lib/availability";
+import { MODEL_REGISTRY } from "@/lib/models";
 import { useChatStore, uid } from "@/lib/store";
-import type { ApiChatMessage, ChatStreamEvent } from "@/lib/types";
+import type { ApiChatMessage, ChatStreamEvent, ModelId } from "@/lib/types";
 
 /**
  * Orchestrates talking to /api/chat: streaming SSE parsing, stop/regenerate,
@@ -17,37 +20,47 @@ export function useChat() {
     abortRef.current?.abort();
   }, []);
 
-  const streamReply = useCallback(async (chatId: string, model: string, temperature: number) => {
-    const store = useChatStore.getState();
-    const chat = store.chats.find((c) => c.id === chatId);
-    if (!chat) return;
+  /** Blocks generation when the server reports the model can't run here. */
+  const guardModel = useCallback((model: ModelId): boolean => {
+    if (!isModelUnavailable(model)) return true;
+    toast.info(`${MODEL_REGISTRY[model].name} is unavailable on this deployment`, {
+      description: availabilityHint(model) ?? "Pick another model in the sidebar.",
+    });
+    return false;
+  }, []);
 
-    const messages: ApiChatMessage[] = chat.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+  const streamReply = useCallback(
+    async (chatId: string, model: string, temperature: number, agent: boolean) => {
+      const store = useChatStore.getState();
+      const chat = store.chats.find((c) => c.id === chatId);
+      if (!chat) return;
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    store.setStreaming({ chatId, text: "", startedAt: Date.now() });
-    store.setError(chatId, null);
+      const messages: ApiChatMessage[] = chat.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
-    const finish = (stopped: boolean) => {
-      const s = useChatStore.getState();
-      const streaming = s.streaming;
-      s.commitStreaming(stopped);
-      if (stopped && streaming && !streaming.text.trim()) {
-        s.setError(chatId, "Generation stopped before any text arrived.");
-      }
-    };
+      const controller = new AbortController();
+      abortRef.current = controller;
+      store.setStreaming({ chatId, text: "", startedAt: Date.now(), tools: [] });
+      store.setError(chatId, null);
 
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, temperature, stream: true, messages }),
-        signal: controller.signal,
-      });
+      const finish = (stopped: boolean) => {
+        const s = useChatStore.getState();
+        const streaming = s.streaming;
+        s.commitStreaming(stopped);
+        if (stopped && streaming && !streaming.text.trim()) {
+          s.setError(chatId, "Generation stopped before any text arrived.");
+        }
+      };
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model, temperature, stream: true, agent, messages }),
+          signal: controller.signal,
+        });
 
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -91,6 +104,10 @@ export function useChat() {
 
           if (event.type === "delta") {
             useChatStore.getState().appendDelta(event.text);
+          } else if (event.type === "tool") {
+            useChatStore
+              .getState()
+              .appendToolTrace({ name: event.name, detail: event.detail, ok: event.ok });
           } else if (event.type === "error") {
             useChatStore.getState().setError(chatId, event.message);
           } else if (event.type === "done") {
@@ -119,7 +136,8 @@ export function useChat() {
         abortRef.current = null;
       }
     }
-  }, []);
+  },
+  []);
 
   const send = useCallback(
     async (text: string) => {
@@ -133,6 +151,7 @@ export function useChat() {
         chat = useChatStore.getState().chats[0];
       }
       const chatId = chat.id;
+      if (!guardModel(chat.model)) return;
 
       useChatStore.getState().setTitleFromFirstMessage(chatId, clean);
       useChatStore.getState().appendMessage(chatId, {
@@ -144,30 +163,37 @@ export function useChat() {
 
       const current = useChatStore.getState();
       const target = current.chats.find((c) => c.id === chatId);
-      await streamReply(chatId, target?.model ?? current.currentModel, current.temperature);
+      await streamReply(
+        chatId,
+        target?.model ?? current.currentModel,
+        current.temperature,
+        current.agentMode
+      );
     },
-    [streamReply]
+    [streamReply, guardModel]
   );
 
   const regenerate = useCallback(async () => {
     const store = useChatStore.getState();
     if (store.streaming || !store.activeChatId) return;
     const chatId = store.activeChatId;
+    const target = store.chats.find((c) => c.id === chatId);
+    if (!target || !guardModel(target.model)) return;
     store.removeLastAssistant(chatId);
     const current = useChatStore.getState();
     const chat = current.chats.find((c) => c.id === chatId);
     if (!chat || chat.messages.length === 0) return;
-    await streamReply(chatId, chat.model, current.temperature);
-  }, [streamReply]);
+    await streamReply(chatId, chat.model, current.temperature, current.agentMode);
+  }, [streamReply, guardModel]);
 
   const retry = useCallback(async () => {
     const store = useChatStore.getState();
     if (store.streaming || !store.activeChatId) return;
     const chatId = store.activeChatId;
     const chat = store.chats.find((c) => c.id === chatId);
-    if (!chat || chat.messages.length === 0) return;
-    await streamReply(chatId, chat.model, store.temperature);
-  }, [streamReply]);
+    if (!chat || chat.messages.length === 0 || !guardModel(chat.model)) return;
+    await streamReply(chatId, chat.model, store.temperature, store.agentMode);
+  }, [streamReply, guardModel]);
 
   return { send, stop, regenerate, retry, busy };
 }
